@@ -1,22 +1,15 @@
-'use client'
-
 import { useFormState } from "react-dom";
-import { createPost } from "./actions";
-
-const initialState = {
-  message: ''
-}
+import DisplayPosts from "./ui/posts";
+import CreatePost from "./ui/createpost";
 
 export default function Home() {
-  const [data, formAction] = useFormState(createPost, initialState);
 
   return (
-    <main className="w-full h-full">
-      <form className="flex flex-col" action={formAction}>
-        <input type="text" name="post" id="post"/>
-        <input> { data.message } </input>
-        <button type="submit"> Submit </button>
-      </form>
+    <main className="w-full h-full flex flex-col justify-center">
+      <div className="w-1/3 m-auto">
+        <CreatePost />
+        <DisplayPosts />
+      </div>
     </main>
   );
 }
