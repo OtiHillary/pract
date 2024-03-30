@@ -2,6 +2,7 @@
 
 import { useFormState } from "react-dom";
 import { createPost } from "../actions";
+import CustomTextInput from "./components/input";
 
 const initialState = {
   message: ''
@@ -11,9 +12,10 @@ export default function CreatePost(){
   const [data, formAction] = useFormState(createPost, initialState);
 
    return(
-      <form className="w-full h-12 bg-gray-300 flex flex-col justify-between m-auto" action={formAction}>
-         <input className="border-black outline-black" type="text" name="post" id="post"/>
+      <form className="w-full h-fit flex flex-col justify-between my-auto p-5" action={formAction}>
          <p> { data.message } </p>
+         <CustomTextInput id="title" placeholder="Title"/>
+         <CustomTextInput id="content" placeholder="Post Content"/>
          <button className = "bg-black text-white rounded-md p-3" type="submit"> Submit </button>
       </form>
    )
