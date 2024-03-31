@@ -4,50 +4,52 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { sql } from '@vercel/postgres'
 import { cookies } from 'next/headers'
-import jwt, { Secret } from 'jsonwebtoken';
-import { encrypt, Payload } from './lib'
+import { encrypt, decrypt, Payload, generate } from './lib'
+import { revalidatePath } from 'next/cache'
 
 async function createPost( prevState: any, formdata: FormData ){
    const schema = z.object({ 
-      author: z.string({ required_error: 'Tis field is required' }),
-      title: z.string({ required_error: 'Tis field is required' }),
-      content: z.string({ required_error: 'Tis field is required' }) 
+      author: z.string({ required_error: 'This field is required' }),
+      title: z.string({ required_error: 'This field is required' }),
+      content: z.string({ required_error: 'This field is required' }) 
    })
+   const token = cookies().get('user')?.value;
 
-   const token: string | undefined = cookies().get('user')?.toString();
-   const { loginToken }= jwt.verify(token, process.env.JWT_SECRET) as unknown as Payload;
-   const { user } = await sql`select from users where token = "${ loginToken }"`
-   
-   const data = {
-      title: formdata.get('title')?.toString(),
-      content: formdata.get('content')?.toString(),
-   } 
+   if(token){
+      const login = decrypt(token);
+      const { rows } = await sql`SELECT * FROM users WHERE token = ${ login?.toString() };`
+      console.log(`DECRYPTING ${token} TO ${login}`)
+      console.log(rows)
+      
+      const data = {
+         title: formdata.get('title')?.toString(),
+         content: formdata.get('content')?.toString(),
+      } 
 
-   const isValidated = schema.safeParse(data)
+      const isValidated = schema.safeParse(data)
 
-   if (!isValidated) {
+      if (!isValidated) return { message: 'Could not post successfully' }
+
+      await sql`
+         insert into posts (author_id, title, content, likes, reposts) 
+         values (${ rows[0].id } , ${ data.title }, ${ data.content }, ${0}, ${0})
+      `
+      revalidatePath('/home')
       return {
-         message: 'Could not post successfully'
-      }
+         message: 'Post successful'
+      }      
    }
 
-   await sql`
-      insert into posts (author_id, title, content, likes, reposts) 
-      values (${ user.id } , ${ data.title }, ${ data.content }, ${0}, ${0})
-   `
-   
-   return {
-      message: 'Post successful'
-   }
+
 }
 
 async function getPosts(){
-   const { posts } =   await sql`
+   const { rows } =   await sql`
       SELECT u.name AS author_name, p.title, p.content, p.likes, p.reposts
       FROM posts AS p
       INNER JOIN users AS u ON p.author_id = u.id;
    `
-   return posts
+   return rows
 }
 
 async function login( prevState:any, formdata: FormData ) {
@@ -56,12 +58,11 @@ async function login( prevState:any, formdata: FormData ) {
    })
 
    const data = {
-      loginToken: formdata.get('log_token'),
+      loginToken: formdata.get('log_token')?.toString(),
    }
-   console.log(data)
    const isValidated = schema.safeParse(data)
 
-   const { user } = await sql`select from users where token = "${ data.loginToken }"`
+   const user = await sql` SELECT * FROM users WHERE token = ${ data.loginToken };`
 
    if (!isValidated) return { message: 'Login failure'} 
    else if (!user)   return { message: 'User Token does not exists' }
@@ -72,20 +73,31 @@ async function login( prevState:any, formdata: FormData ) {
    redirect('/home')
 }
 
+async function logout(prevState:any) {
+   cookies().delete('user')
+}
+
 async function signup( prevState:any, formdata: FormData ) {
    const schema = z.object({
       email: z.string({ required_error: 'field is required' }).email({ message: 'Invalid email' }),
-      passsword: z.string({ required_error: 'Field is required' })
    })
    const data = {
       email: formdata.get('email'),
-      password: formdata.get('password')
    }
+
    const isValidated = schema.safeParse(data)
 
    if (!isValidated) {
       return { message: 'Login failure'} 
    }
+
+   let token = generate(data.email?.toString())
+
+   const cookieData = {
+      loginToken: token
+   }
+   let payload = encrypt(cookieData)
+   cookies().set('user', payload)
 
    redirect('/home')
 }
